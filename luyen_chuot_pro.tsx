@@ -3,6 +3,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip,
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, addDoc } from 'firebase/firestore';
+import AIQuestionGenerator from './src/components/AIQuestionGenerator';
 
 // --- Firebase Init ---
 let app, auth, db, appId;
@@ -332,6 +333,29 @@ export default function App() {
       setLoadingError('Lỗi tải dữ liệu. Hãy chắc chắn Google Sheet đã được chia sẻ "Bất kỳ ai có liên kết".');
       setGameState('start');
     }
+  };
+
+  const handlePlayTest = (customQuestions) => {
+    if (!customQuestions || customQuestions.length === 0) return;
+    setQuestions(customQuestions);
+    setCurrentQIndex(0);
+    setCorrectCount(0);
+    setStats({
+      quiz_correct: 0,
+      quiz_wrong: 0,
+      treasure_opened: false,
+      green_collected: 0,
+      blue_collected: 0,
+      gold_collected: 0,
+      red_collected: 0
+    });
+    setHasSaved(false);
+    setTotalTimeLeft(gameDuration);
+    setGameState('question');
+    setTimeLeft(30);
+    setInputText('');
+    setIsWaitingNext(false);
+    setFeedback(null);
   };
 
   // --- Total Game Timer ---
@@ -832,8 +856,27 @@ export default function App() {
               Bắt đầu
             </button>
           </div>
+
+          <button
+            onClick={() => setGameState('ai_generator')}
+            className="w-full mt-4 py-3.5 px-4 rounded-xl font-bold text-base md:text-lg bg-gradient-to-r from-amber-500 via-orange-500 to-indigo-600 hover:scale-[1.02] text-white shadow-xl transition-all duration-300 flex items-center justify-center gap-2 border border-amber-300/30 active:scale-95"
+          >
+            <span>✨</span>
+            <span>Dành cho Giáo viên: Tạo câu hỏi bằng AI</span>
+          </button>
         </div>
       </div>
+    );
+  }
+
+  if (gameState === 'ai_generator') {
+    return (
+      <AIQuestionGenerator
+        onBack={() => setGameState('start')}
+        onPlayTest={handlePlayTest}
+        defaultSpreadsheetId={SPREADSHEET_ID}
+        availableSheets={availableSheets}
+      />
     );
   }
 

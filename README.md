@@ -5,6 +5,11 @@
 ## 🚀 Tính năng nổi bật
 
 - **Hệ thống câu hỏi đa dạng**: Lấy trực tiếp từ Google Sheets, hỗ trợ câu hỏi trắc nghiệm và câu hỏi điền từ, có kèm ảnh minh họa.
+- **✨ Trợ lý AI tạo câu hỏi dành cho Giáo viên**:
+  - Nhập nội dung bài học hoặc tóm tắt kiến thức.
+  - Tự động sinh câu hỏi trắc nghiệm và điền từ thông minh bằng Google Gemini AI.
+  - Giao diện duyệt, chỉnh sửa trực tiếp, thay đổi thứ tự và nạp chơi thử tức thì.
+  - Xuất 1-click chuẩn cấu trúc Google Sheets (Cột A: Ảnh, B: Câu hỏi, C: Đáp án đúng, D-F: Đáp án sai) hoặc tải file CSV.
 - **Minigame luyện thao tác chuột hấp dẫn**:
   - 🟢 Kim cương xanh: Nhấn Chuột Trái (+10 điểm)
   - 🔵 Kim cương lam: Nhấn Chuột Phải (+10 điểm)
