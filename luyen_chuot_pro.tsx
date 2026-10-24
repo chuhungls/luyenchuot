@@ -42,9 +42,22 @@ const BoneIcon = ({ colorClass }) => (
 );
 
 // --- Constants ---
-const SPREADSHEET_ID = '1R4caBv-wVn5JvVcXLoP3W3uLAK7roDg5bXn8NSRnRN4';
+const DEFAULT_SPREADSHEET_ID = '1R4caBv-wVn5JvVcXLoP3W3uLAK7roDg5bXn8NSRnRN4';
 const RESULTS_SPREADSHEET_ID = '1XK1iDZLR9yhvurMMmjGoeYjMdd4ltVEq_tKsscF_MxQ';
 const API_KEY = 'AIzaSyAYTjY_oH7M5v41Zt-h2o8bFQ_p2M2fVsY';
+
+const extractSpreadsheetId = (input) => {
+  if (!input) return '';
+  const trimmed = String(input).trim();
+  const match = trimmed.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+  if (match && match[1]) {
+    return match[1];
+  }
+  if (/^[a-zA-Z0-9-_]{20,}$/.test(trimmed)) {
+    return trimmed;
+  }
+  return trimmed;
+};
 const ITEM_TYPES = {
   GREEN: { id: 'green', color: 'text-green-500', points: 10, action: 'Chuột TRÁI', isDiamond: true },
   BLUE: { id: 'blue', color: 'text-blue-500', points: 10, action: 'Chuột PHẢI', isDiamond: true },
@@ -71,6 +84,18 @@ export default function App() {
   const [availableSheets, setAvailableSheets] = useState([]);
   const [isFetchingSheets, setIsFetchingSheets] = useState(false);
   const [sheetFetchError, setSheetFetchError] = useState('');
+  
+  // Custom Spreadsheet States
+  const [spreadsheetInput, setSpreadsheetInput] = useState(() => {
+    return localStorage.getItem('custom_sheet_url') || '';
+  });
+  const [spreadsheetId, setSpreadsheetId] = useState(() => {
+    const saved = localStorage.getItem('custom_sheet_url') || '';
+    return extractSpreadsheetId(saved) || DEFAULT_SPREADSHEET_ID;
+  });
+  const [showSheetInput, setShowSheetInput] = useState(() => {
+    return Boolean(localStorage.getItem('custom_sheet_url'));
+  });
   const [gameDuration, setGameDuration] = useState(300); // Default 5 mins (300s)
   const [totalTimeLeft, setTotalTimeLeft] = useState(0);
   const [questions, setQuestions] = useState([]);
@@ -230,42 +255,70 @@ export default function App() {
   }, [statsData, selectedStudent]);
 
   // --- Data Fetching ---
-  useEffect(() => {
-    const fetchSheetNames = async () => {
-      setIsFetchingSheets(true);
-      setSheetFetchError('');
-      try {
-        const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}?key=${API_KEY}`;
-        const response = await fetch(url);
-        if (!response.ok) {
-          throw new Error('Lỗi tải danh sách bộ câu hỏi. Hãy kiểm tra lại API Key.');
-        }
-        const data = await response.json();
-        const sheetTitles = data.sheets
-          .map(sheet => sheet.properties.title)
-          .filter(title => title.toLowerCase() !== 'results' && title.toLowerCase() !== 'kết quả');
-        setAvailableSheets(sheetTitles);
-        if (sheetTitles.length > 0) {
-          setGrade(sheetTitles[0]); // Đặt mặc định là sheet đầu tiên tìm thấy
-        }
-      } catch (error) {
-        console.error(error);
-        setSheetFetchError(error.message);
-      } finally {
-        setIsFetchingSheets(false);
+  const fetchSheetNames = useCallback(async (targetId = spreadsheetId) => {
+    const currentId = targetId || DEFAULT_SPREADSHEET_ID;
+    setIsFetchingSheets(true);
+    setSheetFetchError('');
+    try {
+      const url = `https://sheets.googleapis.com/v4/spreadsheets/${currentId}?key=${API_KEY}`;
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error('Không thể tải danh sách bộ câu hỏi. Vui lòng kiểm tra lại link Google Sheet và đảm bảo đã bật chia sẻ "Bất kỳ ai có liên kết đều có thể xem".');
       }
-    };
-
-    if (gameState === 'start') {
-      fetchSheetNames();
+      const data = await response.json();
+      const sheetTitles = data.sheets
+        .map(sheet => sheet.properties.title)
+        .filter(title => title.toLowerCase() !== 'results' && title.toLowerCase() !== 'kết quả');
+      
+      if (sheetTitles.length === 0) {
+        throw new Error('Không tìm thấy sheet câu hỏi nào trong file Google Sheets này.');
+      }
+      setAvailableSheets(sheetTitles);
+      if (sheetTitles.length > 0) {
+        setGrade(sheetTitles[0]); // Đặt mặc định là sheet đầu tiên tìm thấy
+      }
+    } catch (error) {
+      console.error(error);
+      setSheetFetchError(error.message);
+      setAvailableSheets([]);
+    } finally {
+      setIsFetchingSheets(false);
     }
-  }, [gameState]);
+  }, [spreadsheetId]);
+
+  useEffect(() => {
+    if (gameState === 'start') {
+      fetchSheetNames(spreadsheetId);
+    }
+  }, [gameState, spreadsheetId, fetchSheetNames]);
+
+  const handleApplySpreadsheet = () => {
+    const extracted = extractSpreadsheetId(spreadsheetInput);
+    if (!extracted) {
+      setSpreadsheetId(DEFAULT_SPREADSHEET_ID);
+      setSpreadsheetInput('');
+      localStorage.removeItem('custom_sheet_url');
+      fetchSheetNames(DEFAULT_SPREADSHEET_ID);
+    } else {
+      setSpreadsheetId(extracted);
+      localStorage.setItem('custom_sheet_url', spreadsheetInput.trim());
+      fetchSheetNames(extracted);
+    }
+  };
+
+  const handleResetToDefaultSheet = () => {
+    setSpreadsheetInput('');
+    setSpreadsheetId(DEFAULT_SPREADSHEET_ID);
+    localStorage.removeItem('custom_sheet_url');
+    fetchSheetNames(DEFAULT_SPREADSHEET_ID);
+  };
 
   const fetchQuestions = async (selectedGrade) => {
     setGameState('loading');
     setLoadingError('');
     try {
-      const url = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:json&sheet=${selectedGrade}`;
+      const currentId = spreadsheetId || DEFAULT_SPREADSHEET_ID;
+      const url = `https://docs.google.com/spreadsheets/d/${currentId}/gviz/tq?tqx=out:json&sheet=${selectedGrade}`;
       const response = await fetch(url);
       const text = await response.text();
       
@@ -757,14 +810,70 @@ export default function App() {
           </div>
 
           <div className="mb-6">
-            <h3 className="text-xl mb-4 font-semibold text-left">Chọn bộ câu hỏi:</h3>
+            <div className="flex justify-between items-center mb-2">
+              <h3 className="text-xl font-semibold text-left">Chọn bộ câu hỏi:</h3>
+              <button
+                type="button"
+                onClick={() => setShowSheetInput(!showSheetInput)}
+                className="text-xs text-yellow-300 hover:text-yellow-200 underline flex items-center gap-1 font-semibold transition-colors"
+              >
+                <span>{showSheetInput ? '▲ Ẩn ô nhập link' : '▼ Nhập link Google Sheet'}</span>
+              </button>
+            </div>
+
+            {/* Ô nhập link Google Sheet tùy chỉnh */}
+            {showSheetInput && (
+              <div className="mb-4 bg-black/30 p-3.5 rounded-2xl border border-white/20 text-left space-y-2">
+                <label className="text-xs text-indigo-200 block font-medium">
+                  Dán link Google Sheet của bạn (hoặc ID):
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={spreadsheetInput}
+                    onChange={(e) => setSpreadsheetInput(e.target.value)}
+                    placeholder="https://docs.google.com/spreadsheets/d/.../edit"
+                    className="flex-1 px-3 py-2 rounded-xl text-slate-800 bg-white/95 text-xs font-mono outline-none focus:ring-2 focus:ring-yellow-400"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleApplySpreadsheet}
+                    className="px-4 py-2 bg-yellow-400 hover:bg-yellow-300 text-indigo-950 font-bold rounded-xl text-xs transition-colors shadow-md shrink-0"
+                  >
+                    Tải Sheet
+                  </button>
+                </div>
+                <div className="flex justify-between items-center text-[11px] text-indigo-200">
+                  <span>* Chia sẻ: &quot;Bất kỳ ai có liên kết đều xem được&quot;</span>
+                  {spreadsheetId !== DEFAULT_SPREADSHEET_ID && (
+                    <button
+                      type="button"
+                      onClick={handleResetToDefaultSheet}
+                      className="text-amber-300 hover:text-amber-200 underline font-semibold"
+                    >
+                      Dùng Sheet mặc định
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
             <div className="flex justify-center">
               {isFetchingSheets ? (
                 <div className="px-6 py-3 rounded-xl font-bold text-white bg-white/20 animate-pulse w-full">
                   Đang tải danh sách...
                 </div>
               ) : sheetFetchError ? (
-                <p className="text-red-300 bg-red-900/50 p-3 rounded-lg text-sm w-full">{sheetFetchError}</p>
+                <div className="space-y-2 w-full">
+                  <p className="text-red-300 bg-red-900/50 p-3 rounded-lg text-sm w-full">{sheetFetchError}</p>
+                  <button
+                    type="button"
+                    onClick={handleResetToDefaultSheet}
+                    className="text-xs text-yellow-300 underline block text-center w-full"
+                  >
+                    Quay lại Google Sheet mặc định
+                  </button>
+                </div>
               ) : (
                 <select
                   value={grade}
@@ -874,7 +983,7 @@ export default function App() {
       <AIQuestionGenerator
         onBack={() => setGameState('start')}
         onPlayTest={handlePlayTest}
-        defaultSpreadsheetId={SPREADSHEET_ID}
+        defaultSpreadsheetId={spreadsheetId}
         availableSheets={availableSheets}
       />
     );
